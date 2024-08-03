@@ -1,73 +1,98 @@
 "use client"
 import React, { useState, useEffect, useRef } from 'react';
 
-export default function CreatePage() {
-  const [itemPosition, setItemPosition] = useState({ x: 100, y: 100 });
-  const containerRef = useRef(null);
-  const itemRef = useRef(null);
-  const [isDragging, setIsDragging] = useState(false);
+export default function InfiniteGridPage() {
+  const [blocks, setBlocks] = useState([{ id: 1, x: 0, y: 0 }]);
+  const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
+  const [draggedBlock, setDraggedBlock] = useState(null);
+  const [isDraggingViewport, setIsDraggingViewport] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const containerRef = useRef(null);
+
+  const gridSize = 20; // px
 
   useEffect(() => {
     const handleMouseMove = (e) => {
-      if (isDragging && containerRef.current && itemRef.current) {
-        const containerRect = containerRef.current.getBoundingClientRect();
-        const itemRect = itemRef.current.getBoundingClientRect();
-        
-        let newX = e.clientX - dragStart.x;
-        let newY = e.clientY - dragStart.y;
-
-        // Constrain X position
-        newX = Math.max(0, Math.min(newX, containerRect.width - itemRect.width));
-        
-        // Constrain Y position
-        newY = Math.max(0, Math.min(newY, containerRect.height - itemRect.height));
-
-        setItemPosition({ x: newX, y: newY });
+      if (draggedBlock !== null) {
+        const newX = Math.round((e.clientX - dragStart.x) / (gridSize * viewport.zoom)) * gridSize;
+        const newY = Math.round((e.clientY - dragStart.y) / (gridSize * viewport.zoom)) * gridSize;
+        setBlocks(blocks.map(block => 
+          block.id === draggedBlock ? { ...block, x: newX, y: newY } : block
+        ));
+      } else if (isDraggingViewport) {
+        setViewport(prev => ({
+          ...prev,
+          x: prev.x + (dragStart.x - e.clientX) / prev.zoom,
+          y: prev.y + (dragStart.y - e.clientY) / prev.zoom
+        }));
       }
     };
 
     const handleMouseUp = () => {
-      setIsDragging(false);
+      setDraggedBlock(null);
+      setIsDraggingViewport(false);
     };
 
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
 
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, dragStart]);
+  }, [draggedBlock, isDraggingViewport, dragStart, blocks, viewport.zoom]);
 
-  const handleMouseDown = (e) => {
-    setIsDragging(true);
-    setDragStart({ 
-      x: e.clientX - itemPosition.x, 
-      y: e.clientY - itemPosition.y 
-    });
+  const handleMouseDown = (e, blockId = null) => {
+    if (blockId !== null) {
+      setDraggedBlock(blockId);
+    } else {
+      setIsDraggingViewport(true);
+    }
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleWheel = (e) => {
+    e.preventDefault();
+    setViewport(prev => ({
+      ...prev,
+      zoom: Math.max(0.1, Math.min(10, prev.zoom * (1 - e.deltaY * 0.001)))
+    }));
   };
 
   return (
-    <div ref={containerRef} className="relative w-full h-screen bg-gray-100 overflow-hidden">
-      {/* Dot grid background */}
-      <div 
-        className="absolute inset-0 bg-white"
+    <div 
+      ref={containerRef}
+      className="relative w-full h-screen overflow-hidden bg-white"
+      onMouseDown={(e) => handleMouseDown(e)}
+      onWheel={handleWheel}
+    >
+      <div
+        className="absolute inset-0"
         style={{
           backgroundImage: 'radial-gradient(circle, #e5e7eb 1px, transparent 1px)',
-          backgroundSize: '20px 20px'
+          backgroundSize: `${gridSize * viewport.zoom}px ${gridSize * viewport.zoom}px`,
+          backgroundPosition: `${-viewport.x * viewport.zoom}px ${-viewport.y * viewport.zoom}px`,
+          transform: `scale(${viewport.zoom})`,
+          transformOrigin: '0 0'
         }}
       />
       
-      {/* Draggable item */}
-      <div
-        ref={itemRef}
-        className="absolute w-20 h-20 bg-blue-500 rounded cursor-move"
-        style={{ left: `${itemPosition.x}px`, top: `${itemPosition.y}px` }}
-        onMouseDown={handleMouseDown}
-      />
+      {blocks.map(block => (
+        <div
+          key={block.id}
+          className="absolute w-20 h-20 bg-blue-500 rounded cursor-move"
+          style={{
+            left: `${(block.x - viewport.x) * viewport.zoom}px`,
+            top: `${(block.y - viewport.y) * viewport.zoom}px`,
+            transform: `scale(${viewport.zoom})`,
+            transformOrigin: '0 0'
+          }}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            handleMouseDown(e, block.id);
+          }}
+        />
+      ))}
     </div>
   );
 }
