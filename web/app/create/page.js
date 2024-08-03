@@ -1,98 +1,152 @@
 "use client"
 import React, { useState, useEffect, useRef } from 'react';
 
-export default function InfiniteGridPage() {
-  const [blocks, setBlocks] = useState([{ id: 1, x: 0, y: 0 }]);
-  const [viewport, setViewport] = useState({ x: 0, y: 0, zoom: 1 });
-  const [draggedBlock, setDraggedBlock] = useState(null);
-  const [isDraggingViewport, setIsDraggingViewport] = useState(false);
+export default function CreatePage() {
+  const [zoom, setZoom] = useState(100);
+  const gridSize = 40; // Fixed grid size
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const containerRef = useRef(null);
+  
+  const handleWheel = (e) => {
+    e.preventDefault();
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
 
-  const gridSize = 20; // px
+    const delta = e.deltaY * -0.01;
+    const newZoom = Math.min(Math.max(zoom + delta * zoom, 25), 400);
+
+    const scale = newZoom / zoom;
+    const newOffset = {
+      x: x - scale * (x - offset.x),
+      y: y - scale * (y - offset.y)
+    };
+
+    setZoom(Number(newZoom.toFixed(2)));
+    setOffset(newOffset);
+  };
+
+  const handleMouseDown = (e) => {
+    if (e.target === containerRef.current) {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - offset.x, y: e.clientY - offset.y });
+    }
+  };
+
+  const handleMouseMove = (e) => {
+    if (isDragging) {
+      const newX = e.clientX - dragStart.x;
+      const newY = e.clientY - dragStart.y;
+      setOffset({ x: newX, y: newY });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
 
   useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (draggedBlock !== null) {
-        const newX = Math.round((e.clientX - dragStart.x) / (gridSize * viewport.zoom)) * gridSize;
-        const newY = Math.round((e.clientY - dragStart.y) / (gridSize * viewport.zoom)) * gridSize;
-        setBlocks(blocks.map(block => 
-          block.id === draggedBlock ? { ...block, x: newX, y: newY } : block
-        ));
-      } else if (isDraggingViewport) {
-        setViewport(prev => ({
-          ...prev,
-          x: prev.x + (dragStart.x - e.clientX) / prev.zoom,
-          y: prev.y + (dragStart.y - e.clientY) / prev.zoom
-        }));
-      }
-    };
-
-    const handleMouseUp = () => {
-      setDraggedBlock(null);
-      setIsDraggingViewport(false);
-    };
-
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [draggedBlock, isDraggingViewport, dragStart, blocks, viewport.zoom]);
-
-  const handleMouseDown = (e, blockId = null) => {
-    if (blockId !== null) {
-      setDraggedBlock(blockId);
-    } else {
-      setIsDraggingViewport(true);
-    }
-    setDragStart({ x: e.clientX, y: e.clientY });
-  };
-
-  const handleWheel = (e) => {
-    e.preventDefault();
-    setViewport(prev => ({
-      ...prev,
-      zoom: Math.max(0.1, Math.min(10, prev.zoom * (1 - e.deltaY * 0.001)))
-    }));
-  };
+  }, [isDragging, dragStart]);
 
   return (
     <div 
       ref={containerRef}
-      className="relative w-full h-screen overflow-hidden bg-white"
-      onMouseDown={(e) => handleMouseDown(e)}
+      className="relative w-full h-screen overflow-hidden bg-gray-100"
       onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
     >
       <div
         className="absolute inset-0"
         style={{
-          backgroundImage: 'radial-gradient(circle, #e5e7eb 1px, transparent 1px)',
-          backgroundSize: `${gridSize * viewport.zoom}px ${gridSize * viewport.zoom}px`,
-          backgroundPosition: `${-viewport.x * viewport.zoom}px ${-viewport.y * viewport.zoom}px`,
-          transform: `scale(${viewport.zoom})`,
-          transformOrigin: '0 0'
+          transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom / 100})`,
+          transformOrigin: '0 0',
+          transition: 'transform 0.1s ease-out',
         }}
-      />
-      
-      {blocks.map(block => (
-        <div
-          key={block.id}
-          className="absolute w-20 h-20 bg-blue-500 rounded cursor-move"
+      >
+        {/* Grid background */}
+        <div 
+          className="absolute inset-0"
           style={{
-            left: `${(block.x - viewport.x) * viewport.zoom}px`,
-            top: `${(block.y - viewport.y) * viewport.zoom}px`,
-            transform: `scale(${viewport.zoom})`,
-            transformOrigin: '0 0'
-          }}
-          onMouseDown={(e) => {
-            e.stopPropagation();
-            handleMouseDown(e, block.id);
+            backgroundImage: 'radial-gradient(circle, #e5e7eb 3px, transparent 3px)',
+            backgroundSize: `${gridSize}px ${gridSize}px`,
+            width: '200%',
+            height: '200%',
+            left: '-50%',
+            top: '-50%',
           }}
         />
-      ))}
+        
+        {/* Draggable item */}
+        <DraggableItem gridSize={gridSize} zoom={zoom} offset={offset} />
+      </div>
+
+      {/* Zoom indicator */}
+      <div className="fixed top-4 right-4 bg-white text-black p-2 rounded shadow z-10">
+        Zoom: {zoom.toFixed(2)}%
+      </div>
     </div>
+  );
+}
+
+function DraggableItem({ gridSize, zoom, offset }) {
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  const handleMouseDown = (e) => {
+    e.stopPropagation();
+    setIsDragging(true);
+    const rect = e.target.getBoundingClientRect();
+    setDragStart({ 
+      x: e.clientX - rect.left, 
+      y: e.clientY - rect.top 
+    });
+  };
+
+  const handleMouseMove = (e) => {
+    if (isDragging) {
+      const scale = zoom / 100;
+      const newX = Math.round((e.clientX - dragStart.x - offset.x) / (gridSize * scale)) * gridSize;
+      const newY = Math.round((e.clientY - dragStart.y - offset.y) / (gridSize * scale)) * gridSize;
+      setPosition({ x: newX, y: newY });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, dragStart, zoom, offset]);
+
+  return (
+    <div
+      className="absolute bg-blue-500 rounded cursor-move"
+      style={{
+        width: `${gridSize}px`,
+        height: `${gridSize}px`,
+        left: position.x,
+        top: position.y,
+        transformOrigin: 'top left',
+      }}
+      onMouseDown={handleMouseDown}
+    />
   );
 }
