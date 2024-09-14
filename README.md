@@ -5,14 +5,5 @@ This is currently in progress, and this readme is for arcade.
 [link](https://pyteract.vercel.app)
 
 # How to Run
-
-## Run Backend
-1. `cd backend`
-2. `python main.py`
-
-## Run Frontend
 1. `cd web`
 2. `npm run dev`
-
-## Update cached weeks
-`python reloadweeks.py`
